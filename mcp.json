@@ -1,0 +1,19 @@
+{
+  "_comment": "MCP client configuration for Claude Desktop",
+  "servers": [
+    {
+      "name": "swift-mcp",
+      "_comment": "Launches the package executable via 'swift run MCPSwift' using stdio transport",
+      "command": "swift",
+      "args": [
+        "run",
+        "MCPSwift"
+      ],
+      "transport": "stdio",
+      "_comment_args": "Optional arguments can be added here, e.g. '--flag'",
+      "optional_args": [],
+      "_comment_env": "Optional environment variables can be set here, e.g. { \"KEY\": \"VALUE\" }",
+      "env": {}
+    }
+  ]
+}
