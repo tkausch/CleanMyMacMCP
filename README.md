@@ -122,7 +122,30 @@ This server implements the MCP specification and can be integrated with MCP-comp
 
 ### Client Integration
 
-To use this server with an MCP client, configure it as a stdio transport server:
+#### Using with Claude Desktop
+
+To use this server with Claude Desktop, add the following configuration to your Claude Desktop settings:
+
+1. Open Claude Desktop
+2. Go to Settings
+3. Add the following to your MCP servers configuration:
+
+```json
+"mcpServers": {
+  "swift-mcp": {
+    "command": "/Users/thomaskausch/Repos/MCPSwift/.build/arm64-apple-macosx/debug/swift-mcp"
+  }
+}
+```
+
+**Note:** Make sure to:
+- Build the project first: `swift build`
+- Update the path to match your actual project location
+- The executable name should match your Swift package target name
+
+#### Generic MCP Client Integration
+
+For other MCP clients, configure it as a stdio transport server:
 
 ```json
 {
