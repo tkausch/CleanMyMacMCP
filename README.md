@@ -162,6 +162,55 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Update the path to your checkout, build first with `swift build -c release`, then restart Claude Desktop.
 
+### Claude Code
+
+Build the release binary first:
+
+```bash
+swift build -c release
+```
+
+Then register the server with the `claude` CLI. Use `--scope user` to make it
+available in every project, or `--scope local` (the default) for the current
+project only:
+
+```bash
+claude mcp add cleanmymac-mcp --scope user \
+  -- /Users/thomaskausch/Repos/CleanMyMacMCP/.build/arm64-apple-macosx/release/cleanmymac-mcp
+```
+
+Alternatively, let Claude Code build and run it on demand:
+
+```bash
+claude mcp add cleanmymac-mcp --scope user \
+  -- swift run --package-path /Users/thomaskausch/Repos/CleanMyMacMCP -c release cleanmymac-mcp
+```
+
+Verify and manage the registration:
+
+```bash
+claude mcp list            # show configured servers and their status
+claude mcp get cleanmymac-mcp
+claude mcp remove cleanmymac-mcp
+```
+
+Inside a session, `/mcp` shows the connection status and the tools the server
+exposes. To share the configuration with a repo, add it with `--scope project`,
+which writes a checked-in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "cleanmymac-mcp": {
+      "command": "/Users/thomaskausch/Repos/CleanMyMacMCP/.build/arm64-apple-macosx/release/cleanmymac-mcp"
+    }
+  }
+}
+```
+
+Remember to grant the launching process **Full Disk Access** (see above) or the
+`~/Library` scans return `0`.
+
 ### Generic stdio client
 
 ```json
