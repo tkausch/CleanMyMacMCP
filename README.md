@@ -1,158 +1,175 @@
 # MCPSwift
 
-A Swift implementation of a Model Context Protocol (MCP) server that provides system information and file utilities.
+A Swift implementation of a Model Context Protocol (MCP) server that helps an AI assistant analyze and clean up disk space on macOS.
 
 ## Overview
 
-This project implements an MCP server in Swift that exposes useful system tools for macOS. The server provides three main tools:
+This project implements an MCP server in Swift that exposes read-only inspection tools plus one reversible cleanup action. An MCP client (e.g. Claude Desktop) uses these tools to find where disk space is going and to suggest what is safe to remove.
 
-- **Swift Version**: Get the current Swift compiler version
-- **Disk Usage**: View disk usage information for all mounted volumes
-- **File Size**: Check the size of specific files
+The server provides five tools:
+
+| Tool | Type | Purpose |
+|------|------|---------|
+| `disk_usage` | read-only | Free/used space for all mounted volumes (`df -h`) |
+| `directory_sizes` | read-only | Size of each immediate child of a directory, largest first |
+| `largest_files` | read-only | Largest individual files under a directory tree |
+| `scan_known_junk` | read-only | Sizes of well-known cache / log / build-artifact locations with a safe-to-delete note |
+| `move_to_trash` | destructive | Moves a path to the macOS Trash — **dry run unless `confirm: true`** |
 
 ## What is MCP?
 
-Model Context Protocol (MCP) is a standardized way for AI models to interact with external tools and data sources. This server acts as a bridge between AI models and your macOS system, allowing models to safely execute system commands and retrieve information.
-
-## Features
-
-- ✅ Swift version checking
-- ✅ Disk usage monitoring  
-- ✅ File size inspection
-- ✅ Secure stdio transport
-- ✅ Error handling and validation
-- ✅ Human-readable output formatting
+Model Context Protocol (MCP) is a standardized way for AI models to interact with external tools and data sources. This server acts as a bridge between an AI model and your macOS system, letting the model inspect disk usage and (only on explicit confirmation) move items to the Trash.
 
 ## Requirements
 
-- macOS 10.15+ (for Process and FileManager APIs)
-- Swift 5.9+
-- MCP Swift Package
+- macOS 13+
+- Swift 6.2+ toolchain (Xcode 16+)
+- [swift-sdk](https://github.com/modelcontextprotocol/swift-sdk) 0.12.1+ (resolved automatically)
 
 ## Installation
 
 1. Clone this repository:
-```bash
-git clone git@github.com:tkausch/MCPSwift.git
-cd MCPSwift
-```
+   ```bash
+   git clone git@github.com:tkausch/MCPSwift.git
+   cd MCPSwift
+   ```
 
 2. Build the project:
-```bash
-swift build
-```
+   ```bash
+   swift build -c release
+   ```
+   The executable is produced at:
+   ```
+   .build/arm64-apple-macosx/release/swift-mcp
+   ```
 
-3. Run the server:
-```bash
-swift run
-```
+3. (Optional) Run it directly to check it starts:
+   ```bash
+   swift run swift-mcp
+   ```
+   The server communicates over stdio and waits for MCP protocol messages on stdin.
 
-## Usage
+## Full Disk Access
 
-### Running the Server
+Several tools read paths under `~/Library`. macOS blocks that by default. Grant **Full Disk Access** in
+**System Settings → Privacy & Security → Full Disk Access** to whichever process launches the server
+(Claude Desktop, Terminal, or the `swift-mcp` binary itself). Without it, protected paths report a size of
+`0` or are skipped.
 
-The server communicates over stdio (standard input/output), which is the standard transport method for MCP servers:
+## Tools
 
-```bash
-swift run MCPSwift
-```
+### `disk_usage`
 
-The server will start and wait for MCP protocol messages on stdin.
+Disk usage for all mounted volumes.
 
-### Available Tools
+- **Parameters:** none
 
-#### 1. Swift Version Tool
-
-Returns the current Swift compiler version.
-
-**Tool Name:** `swift_version`
-**Description:** Returns the current Swift version by running 'swift --version'
-**Parameters:** None
-
-**Example Response:**
-```
-swift-driver version: 1.87.3 Apple Swift version 5.9.2
-```
-
-#### 2. Disk Usage Tool
-
-Shows disk usage information for all mounted volumes on your Mac.
-
-**Tool Name:** `disk_usage`
-**Description:** Returns disk usage information for all mounted volumes on the Mac
-**Parameters:** None
-
-**Example Response:**
 ```
 Filesystem      Size   Used  Avail Capacity   Mounted on
 /dev/disk3s1s1  926Gi  455Gi  469Gi    50%    /
-/dev/disk3s6    926Gi  2.0Gi  469Gi     1%    /System/Volumes/VM
 ```
 
-#### 3. File Size Tool
+### `directory_sizes`
 
-Returns the size of a specific file in both bytes and human-readable format.
+Size of each immediate child of a directory, sorted largest first, with a total. Use it to find where space is going.
 
-**Tool Name:** `file_size`
-**Description:** Returns the size of a specific file
-**Parameters:**
-- `path` (required): Path to the file to check size
+- `path` (string, optional) — directory to inspect. Defaults to `$HOME`. A leading `~` is expanded.
+- `limit` (integer, optional) — max entries to return. Default `40`.
 
-**Example Request:**
+```
+Directory sizes under /Users/you/Repos:
+
+  12.39 GB  twint-walletapp-ios
+ 951.8 MB   MCPSwift
+ 805.8 MB   EVSESwift
+…
+Total of listed children: 18.56 GB
+```
+
+### `largest_files`
+
+Largest individual files under a directory tree, sorted largest first.
+
+- `path` (string, optional) — directory to scan recursively. Defaults to `$HOME`. `~` is expanded.
+- `min_size_mb` (integer, optional) — ignore files smaller than this. Default `100`.
+- `limit` (integer, optional) — max files to return. Default `20`.
+
+```
+Largest files under /Users/you/Repos/MCPSwift (≥ 5 MB):
+
+   70.7 MB  …/.build/…/pack-2df10fe5….pack
+   67.1 MB  …/.build/…/index/db/v13/…/data.mdb
+```
+
+### `scan_known_junk`
+
+Scans a curated list of macOS cache, log and build-artifact locations and reports the size of each with a
+note on how safe it is to delete, plus an approximate total.
+
+- **Parameters:** none
+
+Locations checked include: user caches, Xcode DerivedData / iOS DeviceSupport / Archives, CoreSimulator
+caches, Homebrew / CocoaPods / npm / Yarn / pip / Gradle caches, user logs, iOS device backups, Trash and
+Downloads.
+
+```
+   6.35 GB  User caches
+            /Users/you/Library/Caches
+            Safe to delete; apps rebuild these.
+
+  35.59 GB  Xcode iOS DeviceSupport
+            /Users/you/Library/Developer/Xcode/iOS DeviceSupport
+            Safe; re-downloaded when you attach a device with that iOS version.
+
+Approximate total reclaimable: 42.1 GB
+```
+
+### `move_to_trash`
+
+Moves a file or directory to the macOS Trash. The move is reversible (restore from Trash until it is emptied).
+
+- `path` (string, required) — absolute or `~`-relative path.
+- `confirm` (boolean, optional) — `false`/omitted performs a **dry run** and only reports what would be
+  moved and its size. `true` performs the move.
+
+Guard rails:
+- Refuses any path outside your home directory.
+- Refuses your home directory itself.
+- Uses `FileManager.trashItem`, so items land in Trash rather than being deleted outright.
+
+```
+DRY RUN — nothing was moved.
+Would move to Trash: /Users/you/Library/Developer/Xcode/DerivedData
+Size: 165.3 MB
+Re-run with "confirm": true to move it.
+```
+
+## Client Integration
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
 ```json
 {
-  "path": "/Users/username/Documents/example.txt"
-}
-```
-
-**Example Response:**
-```
-File: /Users/username/Documents/example.txt
-Size: 1024 bytes (1 KB)
-```
-
-## MCP Protocol Integration
-
-This server implements the MCP specification and can be integrated with MCP-compatible clients. The server supports:
-
-- Tool listing via `tools/list`
-- Tool execution via `tools/call`
-- Error handling and validation
-- Capability negotiation
-
-### Client Integration
-
-#### Using with Claude Desktop
-
-To use this server with Claude Desktop, add the following configuration to your Claude Desktop settings:
-
-1. Open Claude Desktop
-2. Go to Settings
-3. Add the following to your MCP servers configuration:
-
-```json
-"mcpServers": {
-  "swift-mcp": {
-    "command": "/Users/thomaskausch/Repos/MCPSwift/.build/arm64-apple-macosx/debug/swift-mcp"
+  "mcpServers": {
+    "swift-mcp": {
+      "command": "/Users/thomaskausch/Repos/MCPSwift/.build/arm64-apple-macosx/release/swift-mcp"
+    }
   }
 }
 ```
 
-**Note:** Make sure to:
-- Build the project first: `swift build`
-- Update the path to match your actual project location
-- The executable name should match your Swift package target name
+Update the path to your checkout, build first with `swift build -c release`, then restart Claude Desktop.
 
-#### Generic MCP Client Integration
-
-For other MCP clients, configure it as a stdio transport server:
+### Generic stdio client
 
 ```json
 {
   "servers": {
     "swift-mcp": {
       "command": "swift",
-      "args": ["run", "MCPSwift"],
+      "args": ["run", "swift-mcp"],
       "cwd": "/path/to/MCPSwift"
     }
   }
@@ -161,84 +178,44 @@ For other MCP clients, configure it as a stdio transport server:
 
 ## Development
 
-### Project Structure
+### Project structure
 
 ```
 MCPSwift/
 ├── Sources/
 │   └── MCPSwift/
-│       └── MCP.swift          # Main server implementation
-├── Package.swift              # Swift Package Manager configuration
-└── README.md                  # This file
+│       └── MCP.swift          # Server + all tool implementations
+├── Package.swift              # SwiftPM configuration
+└── README.md
 ```
 
-### Key Components
+### Key components
 
-- **Server Setup**: Creates an MCP server with tool capabilities
-- **Tool Registration**: Defines available tools and their schemas
-- **Tool Handlers**: Implements the actual tool functionality
-- **Transport**: Uses stdio for communication
+- **Server setup** (`createServer`) — MCP server advertising the `tools` capability.
+- **Tool registration** (`createAvailableTools`) — tool names, JSON schemas and annotations
+  (`readOnlyHint` on the scanners, `destructiveHint` on `move_to_trash`).
+- **Tool handlers** (`execute…Tool`) — the actual logic; shell-outs go through `runProcess`,
+  which returns captured stdout/stderr and tolerates non-zero exits (e.g. `du`/`find` hitting
+  permission-denied subdirectories).
+- **Transport** — `StdioTransport`.
 
-### Adding New Tools
+### Adding a new tool
 
-To add a new tool:
+1. Add a `Tool(...)` entry in `createAvailableTools()`.
+2. Add a `case` in `registerToolCallHandler` dispatching to a new `execute…Tool` function.
+3. Return `CallTool.Result` with `content` and `isError`; use `errorResult(_:)` for failures.
 
-1. Add the tool definition in the `ListTools` handler
-2. Implement the tool logic in the `CallTool` handler
-3. Add appropriate error handling
+Planned incremental additions: `xcode_cruft`, `dev_artifacts` (find `node_modules` / `.build` / `Pods`),
+`homebrew_cleanup_preview`, `docker_disk_usage`, `time_machine_snapshots`, `duplicate_files`,
+`cleanup_report` (aggregated prioritized suggestions).
 
-Example:
-```swift
-// In ListTools handler
-Tool(
-    name: "my_new_tool",
-    description: "Description of what the tool does",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "parameter": .object([
-                "type": .string("string"),
-                "description": .string("Parameter description")
-            ])
-        ]),
-        "required": .array([.string("parameter")])
-    ])
-)
+## Security considerations
 
-// In CallTool handler
-case "my_new_tool":
-    // Implementation here
-    return .init(
-        content: [.text("Tool result")],
-        isError: false
-    )
-```
-
-## Security Considerations
-
-This server executes system commands and accesses the file system. When deploying:
-
-- Run with appropriate user permissions
-- Validate all input parameters
-- Consider sandboxing for production use
-- Monitor for potential security issues
-
-## Error Handling
-
-The server includes comprehensive error handling:
-
-- Invalid tool parameters return descriptive error messages
-- System command failures are caught and reported
-- File access errors are handled gracefully
-- Unknown tools return appropriate error responses
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+- Read-only tools only run `df`, `du`, `find` and `stat` and never modify anything.
+- `move_to_trash` is the only mutating tool: it is dry-run by default, is constrained to the user's home
+  directory, and uses the Trash rather than permanent deletion.
+- No tool uses `sudo`; everything runs with the launching user's permissions.
+- Input paths are validated for existence and type before use.
 
 ## License
 

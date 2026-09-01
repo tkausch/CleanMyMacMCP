@@ -13,7 +13,7 @@ let package = Package(
         .executable(name: "swift-mcp", targets: ["MCPSwift"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk", from: "0.11.0"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk", from: "0.12.1"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
