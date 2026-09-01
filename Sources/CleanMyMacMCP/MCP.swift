@@ -127,6 +127,51 @@ struct HelloWorldServer {
                     "required": .array([.string("path")])
                 ]),
                 annotations: .init(readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false)
+            ),
+            Tool(
+                name: "list_time_machine_backups",
+                description: """
+                Lists local Time Machine snapshots (APFS local snapshots stored on \
+                the Mac's own disk) for every mounted local volume, with each \
+                snapshot's date. These consume local disk space until macOS thins \
+                them. Read-only.
+                """,
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "volume": .object([
+                            "type": .string("string"),
+                            "description": .string("Mount point to inspect (e.g. '/'). Defaults to every mounted local volume.")
+                        ])
+                    ])
+                ]),
+                annotations: .init(readOnlyHint: true, openWorldHint: false)
+            ),
+            Tool(
+                name: "delete_time_machine_backup",
+                description: """
+                Deletes a local Time Machine snapshot by its date (as reported by \
+                list_time_machine_backups, e.g. '2026-09-01-123456'). \
+                DRY RUN BY DEFAULT: without "confirm": true it only reports what \
+                would be deleted. Pass "confirm": true to actually delete it. \
+                Deleting a local snapshot does not affect backups on an external \
+                Time Machine destination.
+                """,
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "snapshot_date": .object([
+                            "type": .string("string"),
+                            "description": .string("Snapshot date to delete, e.g. '2026-09-01-123456'.")
+                        ]),
+                        "confirm": .object([
+                            "type": .string("boolean"),
+                            "description": .string("Set true to perform the deletion. Omitted/false = dry run.")
+                        ])
+                    ]),
+                    "required": .array([.string("snapshot_date")])
+                ]),
+                annotations: .init(readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false)
             )
         ]
     }
@@ -146,6 +191,10 @@ struct HelloWorldServer {
                 return await executeScanKnownJunkTool()
             case "move_to_trash":
                 return executeMoveToTrashTool(params: params)
+            case "list_time_machine_backups":
+                return await executeListTimeMachineBackupsTool(params: params)
+            case "delete_time_machine_backup":
+                return await executeDeleteTimeMachineBackupTool(params: params)
             default:
                 return .init(
                     content: [.text("Unknown tool: \(params.name)")],
@@ -324,6 +373,115 @@ struct HelloWorldServer {
         } catch {
             return errorResult("Failed to move to Trash: \(error.localizedDescription)")
         }
+    }
+
+    static func executeListTimeMachineBackupsTool(params: CallTool.Parameters) async -> CallTool.Result {
+        let volumes: [String]
+        if let requested = params.arguments?["volume"]?.stringValue, !requested.isEmpty {
+            volumes = [requested]
+        } else {
+            volumes = localMountPoints()
+        }
+
+        var lines = ["Local Time Machine snapshots:", ""]
+        var found = 0
+        for volume in volumes {
+            let output = await runProcess(
+                executable: "/usr/bin/tmutil",
+                arguments: ["listlocalsnapshots", volume]
+            )
+            let text: String
+            switch output {
+            case let .success(value): text = value
+            case let .failure(value):
+                lines.append("\(volume): \(value.trimmingCharacters(in: .whitespacesAndNewlines))")
+                lines.append("")
+                continue
+            }
+
+            let dates = text
+                .split(separator: "\n")
+                .compactMap { snapshotDate(fromListingLine: String($0)) }
+
+            guard !dates.isEmpty else { continue }
+            lines.append("\(volume):")
+            for date in dates {
+                lines.append("    \(date)")
+                found += 1
+            }
+            lines.append("")
+        }
+
+        if found == 0 {
+            lines.append("No local snapshots found.")
+        } else {
+            lines.append("\(found) local snapshot(s). Delete one with delete_time_machine_backup.")
+        }
+        lines.append("")
+        lines.append("Note: this lists on-disk APFS local snapshots, not backups on an external Time Machine drive.")
+        return .init(content: [.text(lines.joined(separator: "\n"))], isError: false)
+    }
+
+    static func executeDeleteTimeMachineBackupTool(params: CallTool.Parameters) async -> CallTool.Result {
+        guard let rawDate = params.arguments?["snapshot_date"]?.stringValue, !rawDate.isEmpty else {
+            return errorResult("Missing or invalid 'snapshot_date' parameter")
+        }
+        // Accept either a bare date or a full "com.apple.TimeMachine.<date>.local" name.
+        let snapshotDate = snapshotDate(fromListingLine: rawDate) ?? rawDate
+
+        // Basic shape check: YYYY-MM-DD-HHMMSS
+        let pattern = #"^\d{4}-\d{2}-\d{2}-\d{6}$"#
+        guard snapshotDate.range(of: pattern, options: .regularExpression) != nil else {
+            return errorResult("'\(rawDate)' does not look like a snapshot date (expected e.g. 2026-09-01-123456).")
+        }
+
+        let confirm = params.arguments?["confirm"]?.boolValue ?? false
+        guard confirm else {
+            return .init(content: [.text("""
+            DRY RUN — nothing was deleted.
+            Would delete local snapshot: \(snapshotDate)
+            Re-run with "confirm": true to delete it.
+            """)], isError: false)
+        }
+
+        let output = await runProcess(
+            executable: "/usr/bin/tmutil",
+            arguments: ["deletelocalsnapshots", snapshotDate]
+        )
+        switch output {
+        case let .success(text):
+            return .init(content: [.text("""
+            Deleted local snapshot \(snapshotDate).
+            \(text.trimmingCharacters(in: .whitespacesAndNewlines))
+            """)], isError: false)
+        case let .failure(text):
+            return errorResult("Failed to delete snapshot \(snapshotDate): \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+    }
+
+    /// Extracts a `YYYY-MM-DD-HHMMSS` snapshot date from a `tmutil listlocalsnapshots`
+    /// line such as `com.apple.TimeMachine.2026-09-01-123456.local`.
+    static func snapshotDate(fromListingLine line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let pattern = #"\d{4}-\d{2}-\d{2}-\d{6}"#
+        guard let range = trimmed.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(trimmed[range])
+    }
+
+    /// Mount points of local (non-network) mounted volumes.
+    static func localMountPoints() -> [String] {
+        let keys: [URLResourceKey] = [.volumeIsLocalKey]
+        guard let urls = FileManager.default.mountedVolumeURLs(
+            includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]
+        ) else {
+            return ["/"]
+        }
+        var points = urls.compactMap { url -> String? in
+            let isLocal = (try? url.resourceValues(forKeys: [.volumeIsLocalKey]))?.volumeIsLocal ?? false
+            return isLocal ? url.path : nil
+        }
+        if !points.contains("/") { points.insert("/", at: 0) }
+        return points
     }
 
     // MARK: - Known junk locations

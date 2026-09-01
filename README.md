@@ -4,9 +4,9 @@ A Swift implementation of a Model Context Protocol (MCP) server that helps an AI
 
 ## Overview
 
-This project implements an MCP server in Swift that exposes read-only inspection tools plus one reversible cleanup action. An MCP client (e.g. Claude Desktop) uses these tools to find where disk space is going and to suggest what is safe to remove.
+This project implements an MCP server in Swift that exposes read-only inspection tools plus reversible cleanup actions. An MCP client (e.g. Claude Desktop) uses these tools to find where disk space is going and to suggest what is safe to remove.
 
-The server provides five tools:
+The server provides these tools:
 
 | Tool | Type | Purpose |
 |------|------|---------|
@@ -14,7 +14,9 @@ The server provides five tools:
 | `directory_sizes` | read-only | Size of each immediate child of a directory, largest first |
 | `largest_files` | read-only | Largest individual files under a directory tree |
 | `scan_known_junk` | read-only | Sizes of well-known cache / log / build-artifact locations with a safe-to-delete note |
+| `list_time_machine_backups` | read-only | Local APFS Time Machine snapshots per volume, with their dates (`tmutil listlocalsnapshots`) |
 | `move_to_trash` | destructive | Moves a path to the macOS Trash — **dry run unless `confirm: true`** |
+| `delete_time_machine_backup` | destructive | Deletes a local Time Machine snapshot by date — **dry run unless `confirm: true`** |
 
 ## What is MCP?
 
