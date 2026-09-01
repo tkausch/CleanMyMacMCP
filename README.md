@@ -1,7 +1,5 @@
 ![CleanMyMacMCP](assets/project.png)
 
-# CleanMyMacMCP
-
 A Swift [Model Context Protocol](https://modelcontextprotocol.io) server that helps an AI assistant find and reclaim disk space on macOS.
 
 ## Overview
