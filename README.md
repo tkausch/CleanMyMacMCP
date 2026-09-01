@@ -80,4 +80,7 @@ function returning `CallTool.Result`.
 
 ## License
 
-Copyright © 2026 Thomas Kausch. All Rights Reserved.
+Proprietary. Free for **personal, non-commercial use**; **commercial use
+requires a paid license** — contact thomas@kausch.li. See [LICENSE](LICENSE).
+
+Copyright © 2026 Thomas Kausch. All rights reserved.
