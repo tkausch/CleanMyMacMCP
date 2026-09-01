@@ -1,10 +1,8 @@
-<p align="center">
-  <img src="assets/logo.png" alt="CleanMyMacMCP logo" width="180" height="180">
-</p>
+![CleanMyMacMCP](assets/project.png)
 
-<h1 align="center">CleanMyMacMCP</h1>
+# CleanMyMacMCP
 
-<p align="center">A Swift <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server that helps an AI assistant find and reclaim disk space on macOS.</p>
+A Swift [Model Context Protocol](https://modelcontextprotocol.io) server that helps an AI assistant find and reclaim disk space on macOS.
 
 ## Overview
 
