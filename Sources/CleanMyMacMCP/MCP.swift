@@ -19,7 +19,7 @@ struct HelloWorldServer {
 
     static func createServer() -> Server {
         return Server(
-            name: "swift-mcp",
+            name: "cleanmymac-mcp",
             version: "2.0.0",
             capabilities: .init(
                 tools: .init(listChanged: true)

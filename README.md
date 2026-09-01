@@ -1,4 +1,4 @@
-# MCPSwift
+# CleanMyMacMCP
 
 A Swift implementation of a Model Context Protocol (MCP) server that helps an AI assistant analyze and clean up disk space on macOS.
 
@@ -30,8 +30,8 @@ Model Context Protocol (MCP) is a standardized way for AI models to interact wit
 
 1. Clone this repository:
    ```bash
-   git clone git@github.com:tkausch/MCPSwift.git
-   cd MCPSwift
+   git clone git@github.com:tkausch/CleanMyMacMCP.git
+   cd CleanMyMacMCP
    ```
 
 2. Build the project:
@@ -40,12 +40,12 @@ Model Context Protocol (MCP) is a standardized way for AI models to interact wit
    ```
    The executable is produced at:
    ```
-   .build/arm64-apple-macosx/release/swift-mcp
+   .build/arm64-apple-macosx/release/cleanmymac-mcp
    ```
 
 3. (Optional) Run it directly to check it starts:
    ```bash
-   swift run swift-mcp
+   swift run cleanmymac-mcp
    ```
    The server communicates over stdio and waits for MCP protocol messages on stdin.
 
@@ -53,7 +53,7 @@ Model Context Protocol (MCP) is a standardized way for AI models to interact wit
 
 Several tools read paths under `~/Library`. macOS blocks that by default. Grant **Full Disk Access** in
 **System Settings → Privacy & Security → Full Disk Access** to whichever process launches the server
-(Claude Desktop, Terminal, or the `swift-mcp` binary itself). Without it, protected paths report a size of
+(Claude Desktop, Terminal, or the `cleanmymac-mcp` binary itself). Without it, protected paths report a size of
 `0` or are skipped.
 
 ## Tools
@@ -80,7 +80,7 @@ Size of each immediate child of a directory, sorted largest first, with a total.
 Directory sizes under /Users/you/Repos:
 
   12.39 GB  twint-walletapp-ios
- 951.8 MB   MCPSwift
+ 951.8 MB   CleanMyMacMCP
  805.8 MB   EVSESwift
 …
 Total of listed children: 18.56 GB
@@ -95,7 +95,7 @@ Largest individual files under a directory tree, sorted largest first.
 - `limit` (integer, optional) — max files to return. Default `20`.
 
 ```
-Largest files under /Users/you/Repos/MCPSwift (≥ 5 MB):
+Largest files under /Users/you/Repos/CleanMyMacMCP (≥ 5 MB):
 
    70.7 MB  …/.build/…/pack-2df10fe5….pack
    67.1 MB  …/.build/…/index/db/v13/…/data.mdb
@@ -153,8 +153,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "swift-mcp": {
-      "command": "/Users/thomaskausch/Repos/MCPSwift/.build/arm64-apple-macosx/release/swift-mcp"
+    "cleanmymac-mcp": {
+      "command": "/Users/thomaskausch/Repos/CleanMyMacMCP/.build/arm64-apple-macosx/release/cleanmymac-mcp"
     }
   }
 }
@@ -167,10 +167,10 @@ Update the path to your checkout, build first with `swift build -c release`, the
 ```json
 {
   "servers": {
-    "swift-mcp": {
+    "cleanmymac-mcp": {
       "command": "swift",
-      "args": ["run", "swift-mcp"],
-      "cwd": "/path/to/MCPSwift"
+      "args": ["run", "cleanmymac-mcp"],
+      "cwd": "/path/to/CleanMyMacMCP"
     }
   }
 }
@@ -181,9 +181,9 @@ Update the path to your checkout, build first with `swift build -c release`, the
 ### Project structure
 
 ```
-MCPSwift/
+CleanMyMacMCP/
 ├── Sources/
-│   └── MCPSwift/
+│   └── CleanMyMacMCP/
 │       └── MCP.swift          # Server + all tool implementations
 ├── Package.swift              # SwiftPM configuration
 └── README.md
